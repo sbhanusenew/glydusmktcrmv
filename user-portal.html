@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Glydus CRM User Portal</title>
+    <meta
+      name="description"
+      content="Glydus CRM user portal for lead registration, activity logging, and customer progress tracking."
+    />
+    <link rel="stylesheet" href="glydus-crm.css" />
+    <link rel="icon" href="/assets/glydus-logo.svg" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="supabase-config.js"></script>
+    <script defer src="glydus-crm.js"></script>
+  </head>
+  <body data-page="user">
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="user-portal.html">
+          <img class="brand__logo" src="/assets/glydus-logo.svg" alt="Glydus" />
+          <span>
+            <span class="brand__eyebrow">GMG Technotrades Pvt. Ltd.</span>
+            <span class="brand__name">CRM User Portal</span>
+          </span>
+        </a>
+
+        <nav class="topnav" aria-label="Primary">
+          <a href="#lead-capture">Lead Capture</a>
+          <a href="#my-pipeline">My Pipeline</a>
+          <a href="#daily-activity">Time Tracker</a>
+        </nav>
+
+        <div class="topbar-actions">
+          <a class="button button--secondary" href="index.html" data-admin-only hidden>Command Center</a>
+          <a class="button button--secondary" href="admin-portal.html" data-admin-only hidden>Admin Portal</a>
+          <span class="session-pill">
+            <span data-user-name>Signed in</span>
+            <small data-user-role></small>
+          </span>
+          <button class="button button--ghost button--small" type="button" data-logout>
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <main class="page">
+        <section class="section intro-band intro-band--compact">
+          <div class="intro-copy">
+            <p class="eyebrow">User Workspace</p>
+            <h1>Capture leads, update customers, and log daily work.</h1>
+            <p class="lead-copy">
+              Users can create and update their assigned records. Admin receives the
+              activity trail and time log automatically.
+            </p>
+          </div>
+
+          <div class="inline-control">
+            <label for="user-selector">Working as</label>
+            <select id="user-selector"></select>
+          </div>
+        </section>
+
+        <section class="section stats-grid" aria-label="User CRM metrics">
+          <article class="metric-card">
+            <span>My leads</span>
+            <strong id="user-my-leads-count">0</strong>
+            <p>Total leads assigned to this user.</p>
+          </article>
+          <article class="metric-card">
+            <span>Follow-ups due</span>
+            <strong id="user-due-count">0</strong>
+            <p>Open records with overdue or today follow-up dates.</p>
+          </article>
+          <article class="metric-card">
+            <span>Active pipeline value</span>
+            <strong id="user-open-value">INR 0</strong>
+            <p>Estimated value across open assigned leads.</p>
+          </article>
+          <article class="metric-card">
+            <span>Time logged today</span>
+            <strong id="user-time-today">0m</strong>
+            <p>Daily activity minutes submitted by this user.</p>
+          </article>
+        </section>
+
+        <section class="section dashboard-grid" id="lead-capture">
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Lead Registration</p>
+                <h2>Create a new lead</h2>
+              </div>
+            </div>
+
+            <form id="lead-create-form" class="form-grid">
+              <label>
+                Company name
+                <input name="companyName" type="text" placeholder="Oceanic Projects" required />
+              </label>
+
+              <label>
+                Contact person
+                <input name="contactName" type="text" placeholder="Kunal Sharma" required />
+              </label>
+
+              <label>
+                Email
+                <input name="email" type="text" inputmode="email" placeholder="contact@company.com" required />
+              </label>
+
+              <label>
+                Phone
+                <input name="phone" type="text" placeholder="+91 98XXXXXXXX" />
+              </label>
+
+              <label>
+                Lead source
+                <select name="source" id="lead-source-select"></select>
+              </label>
+
+              <label>
+                Estimated value
+                <input name="estimatedValue" type="text" inputmode="numeric" placeholder="250000" />
+              </label>
+
+              <label class="field-span-2">
+                Next action
+                <input name="nextAction" type="text" placeholder="Schedule technical call" required />
+              </label>
+
+              <label>
+                Follow-up date
+                <input name="followUpDate" type="text" placeholder="YYYY-MM-DD" />
+              </label>
+
+              <label>
+                Priority
+                <select name="priority" id="lead-priority-select"></select>
+              </label>
+
+              <label class="field-span-2">
+                Initial note
+                <textarea
+                  name="lastNote"
+                  rows="4"
+                  placeholder="Capture qualification detail, pain point, or meeting summary."
+                ></textarea>
+              </label>
+
+              <div class="form-actions field-span-2">
+                <button class="button button--primary" type="submit">Create Lead</button>
+              </div>
+            </form>
+
+            <div id="lead-create-message" class="inline-message" aria-live="polite"></div>
+          </section>
+
+          <aside class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Tracking</p>
+                <h2>Lead lookup and follow-up queue</h2>
+              </div>
+            </div>
+
+            <form id="lead-lookup-form" class="inline-form">
+              <input
+                id="lead-lookup-input"
+                type="text"
+                placeholder="Enter lead ID like LEAD-3001"
+                aria-label="Lead ID"
+              />
+              <button id="lead-lookup-button" class="button button--secondary" type="submit">
+                Track
+              </button>
+            </form>
+
+            <div id="lead-lookup-result" class="info-panel info-panel--empty">
+              Search your assigned lead ID to review the current owner, stage, next
+              action, and follow-up date.
+            </div>
+
+            <div class="mini-list-shell">
+              <div class="list-heading">
+                <strong>Upcoming follow-ups</strong>
+                <span id="user-follow-up-count" class="subtle-chip">0 items</span>
+              </div>
+              <div id="user-follow-up-list" class="mini-list"></div>
+            </div>
+          </aside>
+        </section>
+
+        <section class="section workspace-grid" id="my-pipeline">
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">My Pipeline</p>
+                <h2>Track every lead stage</h2>
+              </div>
+              <span id="user-pipeline-count" class="subtle-chip">0 leads</span>
+            </div>
+
+            <div id="user-pipeline-board" class="pipeline-board"></div>
+          </section>
+
+          <aside class="tool-surface" id="lead-editor">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Selected Lead</p>
+                <h2 id="user-editor-title">Choose a lead</h2>
+              </div>
+              <span id="user-editor-stage" class="subtle-chip">Waiting</span>
+            </div>
+
+            <div id="user-editor-empty" class="empty-state">
+              Select a lead card from the pipeline to update its stage, probability,
+              note, next action, and time spent.
+            </div>
+
+            <form id="user-lead-editor" class="stack-form" hidden>
+              <label>
+                Lead ID
+                <input id="user-lead-id" type="text" readonly />
+              </label>
+
+              <div class="detail-grid">
+                <article class="detail-box">
+                  <span>Company</span>
+                  <strong id="user-company-name">-</strong>
+                </article>
+                <article class="detail-box">
+                  <span>Contact</span>
+                  <strong id="user-contact-name">-</strong>
+                </article>
+                <article class="detail-box">
+                  <span>Source</span>
+                  <strong id="user-source-name">-</strong>
+                </article>
+                <article class="detail-box">
+                  <span>Value</span>
+                  <strong id="user-lead-value">-</strong>
+                </article>
+              </div>
+
+              <div class="form-grid">
+                <label>
+                  Stage
+                  <select id="user-stage-select"></select>
+                </label>
+
+                <label>
+                  Priority
+                  <select id="user-priority-select"></select>
+                </label>
+
+                <label>
+                  Probability
+                  <input id="user-probability-input" type="text" inputmode="numeric" placeholder="0 to 100" />
+                </label>
+
+                <label>
+                  Follow-up date
+                  <input id="user-follow-up-input" type="text" placeholder="YYYY-MM-DD" />
+                </label>
+
+                <label>
+                  Time spent minutes
+                  <input id="user-time-input" type="text" inputmode="numeric" placeholder="Optional" />
+                </label>
+
+                <label class="field-span-2">
+                  Next action
+                  <input id="user-next-action-input" type="text" placeholder="What should happen next?" />
+                </label>
+
+                <label class="field-span-2">
+                  Latest note
+                  <textarea
+                    id="user-note-input"
+                    rows="5"
+                    placeholder="Write the latest update from the call, meeting, or email."
+                  ></textarea>
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button class="button button--primary" type="submit">Save Lead Update</button>
+              </div>
+
+              <div id="user-editor-message" class="inline-message" aria-live="polite"></div>
+            </form>
+          </aside>
+        </section>
+
+        <section class="section split-layout" id="daily-activity">
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Daily Activity</p>
+                <h2>Log work against customers</h2>
+              </div>
+            </div>
+
+            <div id="user-activity-insights" class="activity-insight-grid"></div>
+
+            <form id="user-activity-form" class="form-grid">
+              <label>
+                Customer or lead
+                <select name="leadId" id="user-activity-lead-select"></select>
+              </label>
+
+              <label>
+                Activity type
+                <select name="action" id="user-activity-type-select"></select>
+              </label>
+
+              <label>
+                Activity date
+                <input name="activityDate" type="date" />
+              </label>
+
+              <label>
+                Time spent minutes
+                <input name="minutes" type="text" inputmode="numeric" placeholder="30" required />
+              </label>
+
+              <label>
+                Outcome
+                <select name="outcome" id="user-activity-outcome-select"></select>
+              </label>
+
+              <label>
+                Customer sentiment
+                <select name="sentiment" id="user-activity-sentiment-select"></select>
+              </label>
+
+              <label>
+                Activity priority
+                <select name="priority" id="user-activity-priority-select"></select>
+              </label>
+
+              <label>
+                Next follow-up
+                <input name="nextFollowUpDate" type="date" />
+              </label>
+
+              <label class="field-span-2">
+                Deliverable or reference
+                <input name="deliverable" type="text" placeholder="Quote number, ticket, proposal, or meeting reference" />
+              </label>
+
+              <label class="field-span-2">
+                Work summary
+                <textarea
+                  name="note"
+                  rows="4"
+                  placeholder="Describe the call, email, service follow-up, proposal work, or internal action."
+                  required
+                ></textarea>
+              </label>
+
+              <label class="checkbox-field field-span-2">
+                <input name="needsSupport" type="checkbox" />
+                <span>Needs manager support or blocker review</span>
+              </label>
+
+              <div class="form-actions field-span-2">
+                <button class="button button--primary" type="submit">Log Activity</button>
+              </div>
+            </form>
+
+            <div id="user-activity-message" class="inline-message" aria-live="polite"></div>
+          </section>
+
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">My Activity Trail</p>
+                <h2>Recent updates visible to admin</h2>
+              </div>
+            </div>
+
+            <div class="mini-list-shell activity-focus">
+              <div class="list-heading">
+                <strong>Today's focus</strong>
+                <span id="user-activity-focus-count" class="subtle-chip">0 items</span>
+              </div>
+              <div id="user-activity-focus-list" class="mini-list"></div>
+            </div>
+
+            <div class="table-shell">
+              <table class="data-table data-table--activity">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Customer</th>
+                    <th>Type</th>
+                    <th>Time</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="user-activity-table"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>Use this portal for daily lead capture, customer updates, and activity logging.</p>
+        <p id="shared-footer-note"></p>
+      </footer>
+    </div>
+  </body>
+</html>

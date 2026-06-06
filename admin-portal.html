@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Glydus CRM Admin Portal</title>
+    <meta
+      name="description"
+      content="Glydus CRM admin portal for user registration, lead ownership, and activity governance."
+    />
+    <link rel="stylesheet" href="glydus-crm.css" />
+    <link rel="icon" href="/assets/glydus-logo.svg" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="supabase-config.js"></script>
+    <script defer src="glydus-crm.js"></script>
+  </head>
+  <body data-page="admin">
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="index.html">
+          <img class="brand__logo" src="/assets/glydus-logo.svg" alt="Glydus" />
+          <span>
+            <span class="brand__eyebrow">GMG Technotrades Pvt. Ltd.</span>
+            <span class="brand__name">CRM Admin</span>
+          </span>
+        </a>
+
+        <nav class="topnav" aria-label="Primary">
+          <a href="#lead-control">Lead Control</a>
+          <a href="#user-admin">Users</a>
+          <a href="#activity-control">Activity</a>
+        </nav>
+
+        <div class="topbar-actions">
+          <a class="button button--secondary" href="index.html">Command Center</a>
+          <a class="button button--secondary" href="user-portal.html">User Portal</a>
+          <span class="session-pill">
+            <span data-user-name>Signed in</span>
+            <small data-user-role></small>
+          </span>
+          <button class="button button--ghost button--small" type="button" data-logout>
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <main class="page">
+        <section class="section intro-band intro-band--compact">
+          <div class="intro-copy">
+            <p class="eyebrow">Admin Workspace</p>
+            <h1>Govern users, customer ownership, and daily CRM discipline.</h1>
+            <p class="lead-copy">
+              Admins can create secure users, update user details, delete users,
+              assign leads, review customer movement, and inspect activity history.
+            </p>
+          </div>
+        </section>
+
+        <section class="section stats-grid" aria-label="Admin CRM metrics">
+          <article class="metric-card">
+            <span>Total leads</span>
+            <strong id="admin-total-leads">0</strong>
+            <p>All active and closed records in the CRM.</p>
+          </article>
+          <article class="metric-card">
+            <span>Hot leads</span>
+            <strong id="admin-hot-leads">0</strong>
+            <p>High-priority opportunities requiring attention.</p>
+          </article>
+          <article class="metric-card">
+            <span>Won value</span>
+            <strong id="admin-won-value">INR 0</strong>
+            <p>Estimated revenue converted to closed-won.</p>
+          </article>
+          <article class="metric-card">
+            <span>Time logged today</span>
+            <strong id="admin-time-today">0m</strong>
+            <p>Daily CRM work captured by all users.</p>
+          </article>
+        </section>
+
+        <section class="section workspace-grid" id="lead-control">
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Lead Control Center</p>
+                <h2>Review and filter the full lead queue</h2>
+              </div>
+              <span id="admin-lead-count" class="subtle-chip">0 leads</span>
+            </div>
+
+            <div class="toolbar-grid">
+              <label>
+                Stage filter
+                <select id="admin-stage-filter"></select>
+              </label>
+
+              <label class="field-span-2">
+                Search
+                <input
+                  id="admin-search-input"
+                  type="text"
+                  placeholder="Search by lead ID, company, contact, owner, or note"
+                />
+              </label>
+            </div>
+
+            <div id="admin-lead-list" class="record-list"></div>
+          </section>
+
+          <aside class="tool-surface" id="lead-editor">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Lead Editor</p>
+                <h2 id="admin-editor-title">Choose a lead</h2>
+              </div>
+              <span id="admin-editor-stage" class="subtle-chip">Waiting</span>
+            </div>
+
+            <div id="admin-editor-empty" class="empty-state">
+              Select a lead from the queue to update ownership, stage, value, and
+              follow-up instructions.
+            </div>
+
+            <form id="admin-lead-editor" class="stack-form" hidden>
+              <label>
+                Lead ID
+                <input id="admin-lead-id" type="text" readonly />
+              </label>
+
+              <div class="form-grid">
+                <label>
+                  Company name
+                  <input id="admin-company-input" type="text" required />
+                </label>
+
+                <label>
+                  Contact person
+                  <input id="admin-contact-input" type="text" required />
+                </label>
+
+                <label>
+                  Email
+                  <input id="admin-email-input" type="text" inputmode="email" required />
+                </label>
+
+                <label>
+                  Phone
+                  <input id="admin-phone-input" type="text" />
+                </label>
+
+                <label>
+                  Source
+                  <select id="admin-source-select"></select>
+                </label>
+
+                <label>
+                  Owner
+                  <select id="admin-owner-select"></select>
+                </label>
+
+                <label>
+                  Stage
+                  <select id="admin-stage-select"></select>
+                </label>
+
+                <label>
+                  Priority
+                  <select id="admin-priority-select"></select>
+                </label>
+
+                <label>
+                  Estimated value
+                  <input id="admin-value-input" type="text" inputmode="numeric" placeholder="2500000" />
+                </label>
+
+                <label>
+                  Probability
+                  <input id="admin-probability-input" type="text" inputmode="numeric" placeholder="0 to 100" />
+                </label>
+
+                <label>
+                  Follow-up date
+                  <input id="admin-follow-up-input" type="text" placeholder="YYYY-MM-DD" />
+                </label>
+
+                <label>
+                  Time spent minutes
+                  <input id="admin-time-input" type="text" inputmode="numeric" placeholder="Optional" />
+                </label>
+
+                <label class="field-span-2">
+                  Next action
+                  <input id="admin-next-action-input" type="text" placeholder="Define the immediate next step" />
+                </label>
+
+                <label class="field-span-2">
+                  Latest note
+                  <textarea
+                    id="admin-note-input"
+                    rows="5"
+                    placeholder="Capture management note, customer context, or blocker."
+                  ></textarea>
+                </label>
+              </div>
+
+              <div class="form-actions">
+                <button class="button button--primary" type="submit">Save Lead Changes</button>
+              </div>
+
+              <div id="admin-editor-message" class="inline-message" aria-live="polite"></div>
+            </form>
+          </aside>
+        </section>
+
+        <section class="section split-layout" id="user-admin">
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">User Registration</p>
+                <h2>Add or update CRM users</h2>
+              </div>
+            </div>
+
+            <form id="admin-user-form" class="form-grid">
+              <label>
+                Full name
+                <input name="fullName" type="text" placeholder="Riya Nair" required />
+              </label>
+
+              <label>
+                Email
+                <input name="email" type="text" inputmode="email" placeholder="riya.nair@glydus.com" required />
+              </label>
+
+              <label>
+                Login ID
+                <input id="admin-user-login-input" name="loginId" type="text" placeholder="RiyaNair" required />
+              </label>
+
+              <label>
+                Password
+                <input
+                  id="admin-user-password-input"
+                  name="password"
+                  type="password"
+                  autocomplete="new-password"
+                  placeholder="Set user password"
+                  required
+                />
+              </label>
+
+              <label>
+                Role
+                <select name="role" id="admin-user-role-select"></select>
+              </label>
+
+              <label>
+                Department
+                <input name="department" type="text" placeholder="Sales, Presales, Operations" required />
+              </label>
+
+              <label>
+                Status
+                <select name="status" id="admin-user-status-select"></select>
+              </label>
+
+              <div class="form-actions field-span-2">
+                <button id="admin-user-submit" class="button button--primary" type="submit">
+                  Register User
+                </button>
+                <button id="admin-user-cancel" class="button button--secondary" type="button" hidden>
+                  Cancel Edit
+                </button>
+              </div>
+            </form>
+
+            <div id="admin-user-message" class="inline-message" aria-live="polite"></div>
+          </section>
+
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Team Directory</p>
+                <h2>Current CRM users</h2>
+              </div>
+              <span id="admin-user-count" class="subtle-chip">0 users</span>
+            </div>
+
+            <div class="table-shell">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Login ID</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-user-table"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="section" id="activity-control">
+          <section class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Activity Intelligence</p>
+                <h2>Daily work and time tracker across all users</h2>
+              </div>
+              <span id="admin-activity-count" class="subtle-chip">0 entries</span>
+            </div>
+
+            <div class="table-shell">
+              <table class="data-table data-table--activity">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Customer</th>
+                    <th>Type</th>
+                    <th>Time</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-activity-table"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>Use this portal to maintain data quality, access control, and daily visibility.</p>
+        <p id="shared-footer-note"></p>
+      </footer>
+    </div>
+  </body>
+</html>

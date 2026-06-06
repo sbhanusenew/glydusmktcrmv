@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Glydus CRM Command Center</title>
+    <meta
+      name="description"
+      content="Glydus CRM command center for pipeline visibility, activity tracking, and team control."
+    />
+    <link rel="stylesheet" href="glydus-crm.css" />
+    <link rel="icon" href="/assets/glydus-logo.svg" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="supabase-config.js"></script>
+    <script defer src="glydus-crm.js"></script>
+  </head>
+  <body data-page="overview">
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="index.html" aria-label="Glydus CRM home">
+          <img class="brand__logo" src="/assets/glydus-logo.svg" alt="Glydus" />
+          <span>
+            <span class="brand__eyebrow">GMG Technotrades Pvt. Ltd.</span>
+            <span class="brand__name">CRM Command Center</span>
+          </span>
+        </a>
+
+        <nav class="topnav" aria-label="Primary">
+          <a href="#overview">Command</a>
+          <a href="#pipeline">Pipeline</a>
+          <a href="#activity">Activity</a>
+        </nav>
+
+        <div class="topbar-actions">
+          <a class="button button--secondary" href="user-portal.html">User Portal</a>
+          <a class="button button--primary" href="admin-portal.html">Admin Portal</a>
+          <span class="session-pill">
+            <span data-user-name>Signed in</span>
+            <small data-user-role></small>
+          </span>
+          <button class="button button--ghost button--small" type="button" data-logout>
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <main class="page">
+        <section class="section hero-band" id="overview">
+          <div class="hero-copy">
+            <p class="eyebrow">Operational Command Center</p>
+            <h1>Glydus CRM - Steer Your Business to Success</h1>
+            <p class="lead-copy">
+              A marine-focused CRM for lead ownership, account movement, daily work
+              tracking, and management visibility across every customer touchpoint.
+            </p>
+            <div class="intro-actions">
+              <a class="button button--primary" href="admin-portal.html">Open Admin Workspace</a>
+              <a class="button button--secondary" href="user-portal.html">Open User Workspace</a>
+            </div>
+          </div>
+
+          <div class="hero-visual" aria-hidden="true">
+            <div class="hero-visual__ring"></div>
+            <div class="hero-visual__dash">
+              <span>Marine CRM</span>
+              <strong>Precision Control</strong>
+              <p>Pipeline, time, and customer movement in one console.</p>
+            </div>
+            <div class="hero-visual__metrics">
+              <span>Global Marine CRM</span>
+              <span>High Performance</span>
+              <span>Effortless Steering</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section stats-grid" aria-label="CRM metrics">
+          <article class="metric-card">
+            <span>Total leads</span>
+            <strong id="overview-total-leads">0</strong>
+            <p>All current pipeline records under admin control.</p>
+          </article>
+          <article class="metric-card">
+            <span>Open pipeline value</span>
+            <strong id="overview-open-value">INR 0</strong>
+            <p>Estimated value across active opportunities.</p>
+          </article>
+          <article class="metric-card">
+            <span>Won deals</span>
+            <strong id="overview-won-count">0</strong>
+            <p>Converted accounts moving toward onboarding.</p>
+          </article>
+          <article class="metric-card">
+            <span>Time logged today</span>
+            <strong id="overview-time-today">0m</strong>
+            <p>Daily activity minutes submitted by CRM users.</p>
+          </article>
+        </section>
+
+        <section class="section split-layout" id="pipeline">
+          <div class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Pipeline Snapshot</p>
+                <h2>Lead stages across the company</h2>
+              </div>
+            </div>
+
+            <div id="overview-stage-grid" class="stage-summary-grid"></div>
+          </div>
+
+          <div class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Operating Rhythm</p>
+                <h2>How teams keep the CRM current</h2>
+              </div>
+            </div>
+
+            <div class="step-list">
+              <article class="step-item">
+                <strong>1. Admin creates secure users</strong>
+                <p>Every user receives a Login ID, password, role, department, and status.</p>
+              </article>
+              <article class="step-item">
+                <strong>2. Users own only their workspace</strong>
+                <p>Non-admin users work inside their own portal and cannot open admin views.</p>
+              </article>
+              <article class="step-item">
+                <strong>3. Every update becomes activity</strong>
+                <p>Lead movement, notes, and time entries appear in the admin activity trail.</p>
+              </article>
+              <article class="step-item">
+                <strong>4. Leaders review daily discipline</strong>
+                <p>Managers see ownership, stale follow-ups, time logged, and customer notes.</p>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section split-layout" id="activity">
+          <div class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Recent Leads</p>
+                <h2>Current customer movement</h2>
+              </div>
+            </div>
+
+            <div class="table-shell">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Lead ID</th>
+                    <th>Company</th>
+                    <th>Owner</th>
+                    <th>Stage</th>
+                    <th>Value</th>
+                    <th>Next follow-up</th>
+                  </tr>
+                </thead>
+                <tbody id="overview-lead-table"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="tool-surface">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Activity Feed</p>
+                <h2>Latest user work visible to admin</h2>
+              </div>
+            </div>
+
+            <div class="table-shell">
+              <table class="data-table data-table--activity">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>User</th>
+                    <th>Customer</th>
+                    <th>Type</th>
+                    <th>Time</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="overview-activity-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <p>Glydus CRM command center for pipeline control and daily accountability.</p>
+        <p id="shared-footer-note"></p>
+      </footer>
+    </div>
+  </body>
+</html>
