@@ -47,18 +47,36 @@ function sendJson(response, payload) {
 
 loadLocalEnv();
 
+// Reuse the same serverless handlers locally so the dev server matches
+// production behaviour (Vercel maps files in /api to these endpoints).
+const configHandler = require("./api/config.js");
+const adminUsersHandler = require("./api/admin-users.js");
+
+function attachStatusHelper(response) {
+  if (!response.status) {
+    response.status = (code) => {
+      response.statusCode = code;
+      return response;
+    };
+  }
+}
+
 const server = http.createServer((request, response) => {
   const requestPath = decodeURIComponent((request.url || "/").split("?")[0]);
 
   if (requestPath === "/api/config") {
-    sendJson(response, {
-      supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-      supabaseAnonKey:
-        process.env.SUPABASE_ANON_KEY ||
-        process.env.SUPABASE_PUBLISHABLE_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-        "",
+    attachStatusHelper(response);
+    Promise.resolve(configHandler(request, response)).catch(() => {
+      sendJson(response, { error: "Config endpoint failed." });
+    });
+    return;
+  }
+
+  if (requestPath === "/api/admin-users") {
+    attachStatusHelper(response);
+    Promise.resolve(adminUsersHandler(request, response)).catch((error) => {
+      response.statusCode = 500;
+      sendJson(response, { error: error.message || "Admin users endpoint failed." });
     });
     return;
   }
