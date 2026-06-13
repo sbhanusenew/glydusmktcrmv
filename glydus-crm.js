@@ -514,12 +514,23 @@ function teamsSearchUrl(lead) {
   return `https://teams.microsoft.com/l/search/${encodeURIComponent(query)}`;
 }
 
+function whatsappChatUrl(lead) {
+  // Format phone number for WhatsApp (remove spaces, dashes, and add country code if needed)
+  let phone = (lead.phone || "").replace(/\D/g, "");
+  // If phone doesn't start with +, assume it needs country code
+  if (phone && !phone.startsWith("1")) {
+    phone = "1" + phone; // Default to US, adjust as needed
+  }
+  return `https://wa.me/${phone}?text=Hello%20${encodeURIComponent(lead.contactName || "there")},`;
+}
+
 function collaborationActionsHtml(lead, compact = false) {
   const labelSuffix = compact ? "" : ` ${escapeHtml(lead.companyName)}`;
   return `
     <div class="collab-actions" aria-label="Collaboration actions">
       <a class="button button--teams button--small" href="${teamsSearchUrl(lead)}" target="_blank" rel="noopener">Teams${labelSuffix}</a>
       <a class="button button--outlook button--small" href="${outlookComposeUrl(lead)}" target="_blank" rel="noopener">Outlook${labelSuffix}</a>
+      <a class="button button--whatsapp button--small" href="${whatsappChatUrl(lead)}" target="_blank" rel="noopener">WhatsApp${labelSuffix}</a>
     </div>
   `;
 }
@@ -1163,6 +1174,15 @@ function writeStore(data) {
 
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalised));
+    
+    // Sync leads to Supabase if available
+    if (window.supabaseSync && normalised.leads) {
+      for (const lead of normalised.leads) {
+        window.supabaseSync.syncContact(lead).catch(error => {
+          console.error("[Sync] Failed to sync contact:", lead.id, error);
+        });
+      }
+    }
   } catch (error) {
     storageAvailable = false;
     memoryStore = cloneData(normalised);
@@ -2876,6 +2896,11 @@ async function initPage() {
   renderSharedFooter();
   await initRemoteDatabase();
   initAuthForm();
+
+  // Initialize Supabase sync
+  if (window.supabaseSync) {
+    await window.supabaseSync.initialize();
+  }
 
   const authUser = requireAccess();
   if (!authUser) {

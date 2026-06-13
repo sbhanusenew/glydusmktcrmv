@@ -247,6 +247,12 @@ textarea:focus-visible {
   border-color: #0f6cbd;
 }
 
+.button--whatsapp {
+  color: #ffffff;
+  background: #25d366;
+  border-color: #25d366;
+}
+
 .button--danger {
   color: #ffffff;
   background: var(--red);
