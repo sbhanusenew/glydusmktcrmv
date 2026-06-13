@@ -1176,9 +1176,10 @@ function writeStore(data) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalised));
     
     // Sync leads to Supabase if available
-    if (window.supabaseSync && normalised.leads) {
+    if (window.supabaseSync && window.supabaseSync.isInitialized && normalised.leads) {
+      console.log("[Sync] writeStore called, syncing", normalised.leads.length, "leads");
       for (const lead of normalised.leads) {
-        window.supabaseSync.syncContact(lead).catch(error => {
+        window.supabaseSync.syncContactToSupabase(lead).catch(error => {
           console.error("[Sync] Failed to sync contact:", lead.id, error);
         });
       }

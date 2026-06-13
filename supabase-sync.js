@@ -1,342 +1,299 @@
 /**
- * Supabase Sync Module
- * Handles bidirectional data sync between Glydus CRM and Supabase
+ * Supabase Sync Engine for Glydus CRM
+ * Handles bidirectional sync between app and Supabase database
+ * - NO authentication required (uses anonymous access with RLS)
  * - Migrates localStorage data to Supabase on first run
  * - Polls Supabase for changes and updates the UI
- * - Queues offline changes and syncs when reconnected
+ * - Syncs every change to Supabase immediately
  */
 
 class SupabaseSync {
   constructor() {
-    this.syncInterval = null;
-    this.isSyncing = false;
-    this.pendingChanges = [];
-    this.lastSyncTime = {};
-    this.userId = null;
     this.supabase = null;
+    this.isInitialized = false;
+    this.isInitializing = false;
+    this.pollInterval = null;
+    this.pollRate = 5000; // 5 seconds
+    this.userId = null;
+    this.syncInProgress = false;
+    this.lastPollTime = 0;
   }
 
   /**
-   * Initialize Supabase client and start sync
+   * Initialize Supabase connection and start sync
    */
   async initialize() {
+    if (this.isInitialized || this.isInitializing) {
+      console.log("[Sync] Already initialized or initializing");
+      return;
+    }
+
+    this.isInitializing = true;
+    console.log("[Sync] Starting initialization...");
+
     try {
+      // Get config
+      const config = window.GLYDUS_SUPABASE_CONFIG;
+      if (!config || !config.url || !config.anonKey) {
+        console.error("[Sync] Missing Supabase config");
+        this.isInitializing = false;
+        return;
+      }
+
+      // Initialize Supabase client
       const { createClient } = window.supabase;
-      const url = window.GLYDUS_SUPABASE_CONFIG?.url;
-      const anonKey = window.GLYDUS_SUPABASE_CONFIG?.anonKey;
+      this.supabase = createClient(config.url, config.anonKey);
+      console.log("[Sync] Supabase client created");
 
-      if (!url || !anonKey) {
-        console.warn(
-          "[Sync] Supabase config not found. Sync disabled.",
-        );
-        return false;
-      }
+      // Generate user ID (no auth required)
+      this.userId = this.getOrCreateUserId();
+      console.log("[Sync] User ID:", this.userId);
 
-      this.supabase = createClient(url, anonKey);
+      // Perform initial sync - migrate existing data
+      await this.performInitialSync();
 
-      // Get current user session
-      const {
-        data: { session },
-      } = await this.supabase.auth.getSession();
-
-      if (!session) {
-        console.warn("[Sync] No user session. Cannot initialize sync.");
-        return false;
-      }
-
-      this.userId = session.user.id;
-      console.log("[Sync] Initialized with user:", this.userId);
-
-      // Perform initial migration
-      await this.migrateLocalStorageData();
-
-      // Start polling for changes
+      // Start polling for remote changes
       this.startPolling();
 
+      this.isInitialized = true;
+      console.log("[Sync] Initialization complete!");
+    } catch (error) {
+      console.error("[Sync] Initialization failed:", error);
+      this.isInitializing = false;
+    }
+  }
+
+  /**
+   * Generate or retrieve user ID (browser-based, no auth needed)
+   */
+  getOrCreateUserId() {
+    const key = "glydus-sync-user-id";
+    let userId = localStorage.getItem(key);
+    
+    if (!userId) {
+      userId = this.generateUUID();
+      localStorage.setItem(key, userId);
+      console.log("[Sync] Generated new user ID");
+    }
+    
+    return userId;
+  }
+
+  /**
+   * Generate UUID
+   */
+  generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  /**
+   * Perform initial sync - migrate localStorage data to Supabase
+   */
+  async performInitialSync() {
+    console.log("[Sync] Starting initial sync...");
+    
+    try {
+      // Get existing data from localStorage
+      const storeJson = localStorage.getItem("glydus-crm-store-v2");
+      if (!storeJson) {
+        console.log("[Sync] No data in localStorage yet");
+        return;
+      }
+
+      const store = JSON.parse(storeJson);
+      const leads = store.leads || [];
+      
+      if (leads.length === 0) {
+        console.log("[Sync] No leads to migrate");
+        return;
+      }
+
+      console.log(`[Sync] Found ${leads.length} leads to migrate`);
+
+      // Migrate each lead to Supabase
+      for (const lead of leads) {
+        await this.syncContactToSupabase(lead);
+      }
+
+      console.log("[Sync] Initial migration complete!");
+    } catch (error) {
+      console.error("[Sync] Initial sync failed:", error);
+    }
+  }
+
+  /**
+   * Sync a contact to Supabase
+   */
+  async syncContactToSupabase(lead) {
+    if (!this.supabase || !this.userId) {
+      console.warn("[Sync] Not initialized, cannot sync");
+      return;
+    }
+
+    try {
+      // Map app lead format to Supabase contacts format
+      const leadId = lead.id || lead.lead_id || this.generateUUID();
+      const contactData = {
+        user_id: this.userId,
+        lead_id: leadId,
+        name: lead.contactName || lead.name || "",
+        email: lead.email || "",
+        phone: lead.phone || "",
+        source: lead.source || "CRM",
+        priority: lead.priority || "Cold",
+        stage: lead.stage || "New Lead",
+        notes: lead.notes || lead.description || "",
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log("[Sync] Syncing contact to Supabase:", leadId);
+
+      // Upsert: update if exists, insert if new
+      const { data, error } = await this.supabase
+        .from('contacts')
+        .upsert(contactData, { onConflict: 'user_id,lead_id' })
+        .select();
+
+      if (error) {
+        console.error("[Sync] Error syncing contact:", error);
+        return false;
+      }
+
+      console.log("[Sync] Contact synced successfully:", leadId);
       return true;
     } catch (error) {
-      console.error("[Sync] Initialization error:", error);
+      console.error("[Sync] Sync contact error:", error);
       return false;
     }
   }
 
   /**
-   * Migrate data from localStorage to Supabase on first run
-   */
-  async migrateLocalStorageData() {
-    try {
-      const migrationKey = `sync_migrated_${this.userId}`;
-      const alreadyMigrated = localStorage.getItem(migrationKey);
-
-      if (alreadyMigrated) {
-        console.log("[Sync] Data already migrated, skipping...");
-        return;
-      }
-
-      console.log("[Sync] Starting data migration...");
-
-      // Get data from localStorage
-      const leadsData = localStorage.getItem("leads");
-      const leads = leadsData ? JSON.parse(leadsData) : [];
-
-      if (leads.length === 0) {
-        console.log("[Sync] No data to migrate.");
-        localStorage.setItem(migrationKey, "true");
-        return;
-      }
-
-      // Migrate contacts
-      for (const lead of leads) {
-        try {
-          await this.supabase.from("contacts").upsert(
-            {
-              user_id: this.userId,
-              lead_id: lead.id,
-              name: lead.contactName || "",
-              email: lead.email || "",
-              phone: lead.phone || "",
-              source: lead.source || "CRM",
-              priority: lead.priority || "Cold",
-              stage: lead.stage || "New Lead",
-              notes: lead.notes || "",
-            },
-            { onConflict: "user_id,lead_id" },
-          );
-        } catch (error) {
-          console.error("[Sync] Error migrating contact:", lead.id, error);
-        }
-      }
-
-      console.log("[Sync] Migration completed: " + leads.length + " leads migrated");
-      localStorage.setItem(migrationKey, "true");
-    } catch (error) {
-      console.error("[Sync] Migration error:", error);
-    }
-  }
-
-  /**
-   * Start polling for Supabase changes
+   * Start polling for remote changes from Supabase
    */
   startPolling() {
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
     }
 
-    // Poll every 10 seconds
-    this.syncInterval = setInterval(async () => {
-      await this.poll();
-    }, 10000);
+    console.log(`[Sync] Starting polling every ${this.pollRate}ms`);
 
-    // Also do an immediate poll
-    this.poll();
+    // First poll immediately
+    this.pollForChanges();
+
+    // Then poll periodically
+    this.pollInterval = setInterval(() => {
+      this.pollForChanges();
+    }, this.pollRate);
   }
 
   /**
-   * Poll Supabase for changes
+   * Poll for changes from Supabase and update app
    */
-  async poll() {
-    if (this.isSyncing || !this.userId) return;
-
-    try {
-      this.isSyncing = true;
-
-      // Fetch updated contacts
-      const { data: contacts, error: contactsError } =
-        await this.supabase
-          .from("contacts")
-          .select("*")
-          .eq("user_id", this.userId);
-
-      if (contactsError) throw contactsError;
-
-      if (contacts && contacts.length > 0) {
-        this.syncContactsToApp(contacts);
-      }
-
-      // Sync any pending changes
-      await this.syncPendingChanges();
-    } catch (error) {
-      console.error("[Sync] Polling error:", error);
-    } finally {
-      this.isSyncing = false;
+  async pollForChanges() {
+    if (!this.isInitialized || this.syncInProgress || !this.supabase) {
+      return;
     }
-  }
 
-  /**
-   * Sync contacts from Supabase to app
-   */
-  syncContactsToApp(contacts) {
     try {
-      // Convert Supabase contacts back to localStorage format
-      const leads = contacts.map((contact) => ({
-        id: contact.lead_id,
-        contactName: contact.name,
-        email: contact.email,
-        phone: contact.phone,
-        source: contact.source,
-        priority: contact.priority,
-        stage: contact.stage,
-        notes: contact.notes,
-        companyName: contact.name, // Use name as company for display
-        nextAction: contact.notes || "Follow up",
-      }));
+      this.syncInProgress = true;
 
-      // Get current leads from localStorage
-      const currentLeads = JSON.parse(localStorage.getItem("leads") || "[]");
-      const currentLeadIds = new Set(currentLeads.map((l) => l.id));
+      // Fetch all contacts for this user from Supabase
+      const { data: contacts, error } = await this.supabase
+        .from('contacts')
+        .select('*')
+        .eq('user_id', this.userId);
 
-      // Merge: keep local non-synced leads, add/update synced ones
-      const mergedLeads = [];
-      const syncedIds = new Set(contacts.map((c) => c.lead_id));
-
-      // Add synced leads (from Supabase)
-      for (const lead of leads) {
-        mergedLeads.push(lead);
+      if (error) {
+        console.warn("[Sync] Polling error:", error.message);
+        this.syncInProgress = false;
+        return;
       }
 
-      // Add local leads that aren't synced yet
-      for (const localLead of currentLeads) {
-        if (!syncedIds.has(localLead.id)) {
-          mergedLeads.push(localLead);
+      if (!contacts || contacts.length === 0) {
+        console.log("[Sync] No contacts from Supabase");
+        this.syncInProgress = false;
+        return;
+      }
+
+      // Get current leads from app localStorage
+      const storeJson = localStorage.getItem("glydus-crm-store-v2") || "{}";
+      const store = JSON.parse(storeJson);
+      const currentLeads = store.leads || [];
+
+      // Check for new or updated contacts from Supabase
+      let hasChanges = false;
+      for (const contact of contacts) {
+        const existingLead = currentLeads.find(
+          lead => (lead.id || lead.lead_id) === contact.lead_id
+        );
+
+        if (!existingLead) {
+          // New contact from Supabase - add to app
+          const newLead = {
+            id: contact.lead_id,
+            lead_id: contact.lead_id,
+            contactName: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+            source: contact.source,
+            priority: contact.priority,
+            stage: contact.stage,
+            notes: contact.notes,
+            description: contact.notes,
+            companyName: contact.name,
+            created_at: contact.created_at,
+          };
+
+          currentLeads.push(newLead);
+          hasChanges = true;
+          console.log("[Sync] New contact from Supabase:", contact.lead_id);
+        } else if (contact.updated_at && new Date(contact.updated_at) > new Date(existingLead.updated_at || 0)) {
+          // Existing contact was updated in Supabase - update app
+          existingLead.contactName = contact.name;
+          existingLead.email = contact.email;
+          existingLead.phone = contact.phone;
+          existingLead.source = contact.source;
+          existingLead.priority = contact.priority;
+          existingLead.stage = contact.stage;
+          existingLead.notes = contact.notes;
+          existingLead.description = contact.notes;
+          existingLead.updated_at = contact.updated_at;
+          hasChanges = true;
+          console.log("[Sync] Updated contact from Supabase:", contact.lead_id);
         }
       }
 
-      // Update localStorage
-      localStorage.setItem("leads", JSON.stringify(mergedLeads));
+      // Save updated leads to localStorage
+      if (hasChanges) {
+        store.leads = currentLeads;
+        localStorage.setItem("glydus-crm-store-v2", JSON.stringify(store));
+        console.log("[Sync] Updated localStorage with Supabase changes");
 
-      // Trigger UI update
-      if (window.refreshLeadsDisplay) {
-        window.refreshLeadsDisplay();
-      }
-
-      console.log("[Sync] Synced " + mergedLeads.length + " contacts to app");
-    } catch (error) {
-      console.error("[Sync] Error syncing contacts:", error);
-    }
-  }
-
-  /**
-   * Queue a change to be synced
-   */
-  queueChange(type, data) {
-    this.pendingChanges.push({
-      type,
-      data,
-      timestamp: Date.now(),
-    });
-    console.log("[Sync] Queued change:", type);
-  }
-
-  /**
-   * Sync pending changes to Supabase
-   */
-  async syncPendingChanges() {
-    if (this.pendingChanges.length === 0) return;
-
-    const changes = [...this.pendingChanges];
-    this.pendingChanges = [];
-
-    for (const change of changes) {
-      try {
-        if (change.type === "contact_add" || change.type === "contact_update") {
-          const contact = change.data;
-          await this.supabase.from("contacts").upsert(
-            {
-              user_id: this.userId,
-              lead_id: contact.id,
-              name: contact.contactName || "",
-              email: contact.email || "",
-              phone: contact.phone || "",
-              source: contact.source || "CRM",
-              priority: contact.priority || "Cold",
-              stage: contact.stage || "New Lead",
-              notes: contact.notes || "",
-            },
-            { onConflict: "user_id,lead_id" },
-          );
-          console.log("[Sync] Synced contact:", contact.id);
-        } else if (change.type === "contact_delete") {
-          await this.supabase
-            .from("contacts")
-            .delete()
-            .eq("user_id", this.userId)
-            .eq("lead_id", change.data.id);
-          console.log("[Sync] Deleted contact:", change.data.id);
+        // Trigger UI refresh if function exists
+        if (window.refreshLeadsDisplay) {
+          console.log("[Sync] Triggering UI refresh");
+          window.refreshLeadsDisplay();
         }
-      } catch (error) {
-        console.error("[Sync] Error syncing change:", change.type, error);
-        // Re-queue the change for retry
-        this.pendingChanges.push(change);
       }
-    }
-  }
 
-  /**
-   * Manually sync contact to Supabase
-   */
-  async syncContact(contact) {
-    if (!this.userId) {
-      console.warn("[Sync] No user ID, cannot sync contact");
-      return false;
-    }
-
-    try {
-      const { error } = await this.supabase.from("contacts").upsert(
-        {
-          user_id: this.userId,
-          lead_id: contact.id,
-          name: contact.contactName || "",
-          email: contact.email || "",
-          phone: contact.phone || "",
-          source: contact.source || "CRM",
-          priority: contact.priority || "Cold",
-          stage: contact.stage || "New Lead",
-          notes: contact.notes || "",
-        },
-        { onConflict: "user_id,lead_id" },
-      );
-
-      if (error) throw error;
-      console.log("[Sync] Contact synced:", contact.id);
-      return true;
+      this.syncInProgress = false;
     } catch (error) {
-      console.error("[Sync] Error syncing contact:", error);
-      return false;
-    }
-  }
-
-  /**
-   * Delete contact from Supabase
-   */
-  async deleteContact(contactId) {
-    if (!this.userId) {
-      console.warn("[Sync] No user ID, cannot delete contact");
-      return false;
-    }
-
-    try {
-      const { error } = await this.supabase
-        .from("contacts")
-        .delete()
-        .eq("user_id", this.userId)
-        .eq("lead_id", contactId);
-
-      if (error) throw error;
-      console.log("[Sync] Contact deleted:", contactId);
-      return true;
-    } catch (error) {
-      console.error("[Sync] Error deleting contact:", error);
-      return false;
+      console.error("[Sync] Poll error:", error);
+      this.syncInProgress = false;
     }
   }
 
   /**
    * Stop polling
    */
-  stop() {
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
-      this.syncInterval = null;
+  stopPolling() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
       console.log("[Sync] Polling stopped");
     }
   }
@@ -344,3 +301,6 @@ class SupabaseSync {
 
 // Create global instance
 window.supabaseSync = new SupabaseSync();
+
+console.log("[Sync] Sync module loaded");
+
